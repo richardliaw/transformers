@@ -337,17 +337,17 @@ class SummarizationModule(BaseTransformer):
             help="-1 means never early stop. early_stopping_patience is measured in validation checks, not epochs. So val_check_interval will effect it.",
         )
         return parser
-from pytorch_lightning.callbacks import Callback
+# from pytorch_lightning.callbacks import Callback
 from ray import tune
-class TuneReportCallback(Callback):
+# class TuneReportCallback(Callback):
 
-    def on_validation_end(self, trainer, pl_module):
-        metric = pl_module.val_metric
-        # trainer.metrics
-        loss = trainer.callback_metrics['val_avg_loss']
-        metric = trainer.callback_metrics[f'val_avg_{pl_module.val_metric}']
+#     def on_validation_end(self, trainer, pl_module):
+#         metric = pl_module.val_metric
+#         # trainer.metrics
+#         loss = trainer.callback_metrics['val_avg_loss']
+#         metric = trainer.callback_metrics[f'val_avg_{pl_module.val_metric}']
 
-        tune.report(val_avg_loss=loss, val_avg_bleu=metric)
+#         tune.report(val_avg_loss=loss, val_avg_bleu=metric)
 
 class TranslationModule(SummarizationModule):
     mode = "translation"
@@ -394,7 +394,8 @@ def main(args, model=None) -> SummarizationModule:
         es_callback = False
 
     lower_is_better = args.val_metric == "loss"
-    callback = TuneReportCallback()
+    from ray.tune.integration.pytorch_lightning import TuneReportCallback
+
 
     trainer: pl.Trainer = generic_train(
         model,
@@ -402,7 +403,7 @@ def main(args, model=None) -> SummarizationModule:
         logging_callback=Seq2SeqLoggingCallback(),
         checkpoint_callback=get_checkpoint_callback(args.output_dir, model.val_metric, args.save_top_k, lower_is_better),
         early_stopping_callback=es_callback,
-        extra_callbacks=[callback],
+        extra_callbacks=[TuneReportCallback(["val_avg_bleu"], on="validation_end")],
         logger=logger,
     )
     pickle_save(model.hparams, model.output_dir / "hparams.pkl")
